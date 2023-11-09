@@ -1,44 +1,34 @@
-import { renderTopLanguages } from "../src/cards/top-languages-card.js";
-import { blacklist } from "../src/common/blacklist.js";
 import {
   clampValue,
   CONSTANTS,
-  parseArray,
-  parseBoolean,
   renderError,
+  parseBoolean,
 } from "../src/common/utils.js";
-import { fetchTopLanguages } from "../src/fetchers/top-languages-fetcher.js";
 import { isLocaleAvailable } from "../src/translations.js";
+import { renderGistCard } from "../src/cards/gist-card.js";
+import { fetchGist } from "../src/fetchers/gist-fetcher.js";
 
 export default async (req, res) => {
   const {
-    username,
-    hide,
-    hide_title,
-    hide_border,
-    card_width,
+    id,
     title_color,
+    icon_color,
     text_color,
     bg_color,
     theme,
     cache_seconds,
-    layout,
-    langs_count,
-    exclude_repo,
-    size_weight,
-    count_weight,
-    custom_title,
     locale,
     border_radius,
     border_color,
-    disable_animations,
-    hide_progress,
+    show_owner,
+    hide_border,
   } = req.query;
+
   res.setHeader("Content-Type", "image/svg+xml");
 
-  if (blacklist.includes(username)) {
+  if (locale && !isLocaleAvailable(locale)) {
     return res.send(
-      renderError("Something went wrong", "This username is blacklisted", {
+      renderError("Something went wrong", "Language not found", {
         title_color,
         text_color,
         bg_color,
@@ -48,36 +38,30 @@ export default async (req, res) => {
     );
   }
 
-  if (locale && !isLocaleAvailable(locale)) {
-    return res.send(renderError("Something went wrong", "Locale not found"));
-  }
-
-  if (
-    layout !== undefined &&
-    (typeof layout !== "string" ||
-      !["compact", "normal", "donut", "donut-vertical", "pie"].includes(layout))
-  ) {
-    return res.send(
-      renderError("Something went wrong", "Incorrect layout input"),
-    );
-  }
-
   try {
-    const topLangs = await fetchTopLanguages(
-      username,
-      parseArray(exclude_repo),
-      size_weight,
-      count_weight,
-    );
+    const gistData = await fetchGist(id);
 
     let cacheSeconds = clampValue(
-      parseInt(cache_seconds || CONSTANTS.CARD_CACHE_SECONDS, 10),
+      parseInt(cache_seconds || CONSTANTS.SIX_HOURS, 10),
       CONSTANTS.SIX_HOURS,
       CONSTANTS.ONE_DAY,
     );
     cacheSeconds = process.env.CACHE_SECONDS
       ? parseInt(process.env.CACHE_SECONDS, 10) || cacheSeconds
       : cacheSeconds;
+
+    /*
+      if star count & fork count is over 1k then we are kFormating the text
+      and if both are zero we are not showing the stats
+      so we can just make the cache longer, since there is no need to frequent updates
+    */
+    const stars = gistData.starsCount;
+    const forks = gistData.forksCount;
+    const isBothOver1K = stars > 1000 && forks > 1000;
+    const isBothUnder1 = stars < 1 && forks < 1;
+    if (!cache_seconds && (isBothOver1K || isBothUnder1)) {
+      cacheSeconds = CONSTANTS.SIX_HOURS;
+    }
 
     res.setHeader(
       "Cache-Control",
@@ -87,23 +71,17 @@ export default async (req, res) => {
     );
 
     return res.send(
-      renderTopLanguages(topLangs, {
-        custom_title,
-        hide_title: parseBoolean(hide_title),
-        hide_border: parseBoolean(hide_border),
-        card_width: parseInt(card_width, 10),
-        hide: parseArray(hide),
+      renderGistCard(gistData, {
         title_color,
+        icon_color,
         text_color,
         bg_color,
         theme,
-        layout,
-        langs_count,
         border_radius,
         border_color,
         locale: locale ? locale.toLowerCase() : null,
-        disable_animations: parseBoolean(disable_animations),
-        hide_progress: parseBoolean(hide_progress),
+        show_owner: parseBoolean(show_owner),
+        hide_border: parseBoolean(hide_border),
       }),
     );
   } catch (err) {
