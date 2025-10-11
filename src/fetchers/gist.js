@@ -1,7 +1,8 @@
 // @ts-check
 
-import { request, MissingParamError } from "../common/utils.js";
+import { request } from "../common/utils.js";
 import { retryer } from "../common/retryer.js";
+import { MissingParamError } from "../common/error.js";
 
 /**
  * @typedef {import('axios').AxiosRequestHeaders} AxiosRequestHeaders Axios request headers.
@@ -83,7 +84,7 @@ const calculatePrimaryLanguage = (files) => {
 /**
  * Fetch GitHub gist information by given username and ID.
  *
- * @param {string} id Github gist ID.
+ * @param {string} id GitHub gist ID.
  * @returns {Promise<GistData>} Gist data.
  */
 const fetchGist = async (id) => {
